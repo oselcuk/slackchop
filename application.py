@@ -2,8 +2,11 @@ import json
 import random
 import re
 import requests
+import sqlite3
+import time
 from sys import stderr
 from itertools import islice
+from threading import Thread
 
 import praw
 from credentials import *
@@ -11,9 +14,14 @@ from datetime import datetime, timedelta
 from flask import Flask, request, make_response, render_template
 from slackclient import SlackClient
 
-sc = SlackClient(oauth_token_bot)
-user = SlackClient(oauth_token_user)
-reddit = praw.Reddit(client_id=reddit_client_id, 
+db = sqlite3.connect('user_data.db').cursor()
+bot_token = db.execute('SELECT token FROM tokens WHERE token LIKE "xoxb-%" LIMIT 1').fetchone()[0]
+usr_token, usr_id = db.execute('SELECT token, userid FROM tokens WHERE token LIKE "xoxp-%" LIMIT 1').fetchone()
+
+
+bot = SlackClient(bot_token)
+usr = SlackClient(usr_token)
+reddit = praw.Reddit(client_id=reddit_client_id,
     client_secret=reddit_client_secret,
     user_agent='Slackchop')
 
@@ -52,7 +60,7 @@ def get_emojis(init=False, add=None, rmeove=None):
     #  they support a particular emoji either
     emojis = open('emoji_names.txt').read().splitlines()
     # add all current emojis
-    emojis += list(user.api_call('emoji.list')['emoji'].keys())
+    emojis += list(usr.api_call('emoji.list')['emoji'].keys())
     return emojis
 
 emojis = get_emojis()
@@ -66,7 +74,7 @@ def truncate_message(message):
     return message
 
 def send_message(*args, **kwargs):
-    sc.api_call('chat.postMessage', *args, **kwargs)
+    bot.api_call('chat.postMessage', *args, **kwargs)
 
 def handle_message(slack_event, message):
     channel = slack_event['event']['channel']
@@ -217,7 +225,7 @@ def event_handler(slack_event):
         user_id = event['user']
     elif event_type == 'message' and 'text' in event:
         if event['text'] == 'ABORT' and 'thread_ts' in event:
-            sc.api_call('chat.update', channel=event['channel'], text='Aborted by <@{}>. Contact <@{}>'.format(event['user'], slack_event['authed_users'][0]), ts=event['thread_ts'], attachments=[])
+            bot.api_call('chat.update', channel=event['channel'], text='Aborted by <@{}>. Contact <@{}>'.format(event['user'], usr_id), ts=event['thread_ts'], attachments=[])
         handle_message(slack_event, event['text'])
     elif event_type == 'emoji_changed':
         global emojis
@@ -239,15 +247,20 @@ def hears():
             200, {"content_type": "application/json"})
     return event_handler(slack_event)
 
-@application.route("/begin_auth", methods=["GET"])
-def pre_install():
-    return '''
-      <a href="https://slack.com/oauth/authorize?scope={0}&client_id={1}">
-          Add to Slack
-      </a>
-    '''.format(oauth_scope, client_id)
+def new_user(user_id, user_token):
+    sc = SlackClient(user_token)
+    two_weeks_ago = str(time.time() - 14*24*60*60)
+    res = sc.api_call('files.list', ts_to=two_weeks_ago)
+    files = res['files']
+    while res['paging']['page'] < res['paging']['pages']:
+        res = sc.api_call('files.list',
+            ts_to=two_weeks_ago,
+            page=res['paging']['page']+1)
+        files += res['files']
+    for file in files:
+        sc.api_call('files.delete', file=file['id'])
 
-@application.route("/finish_auth", methods=["GET", "POST"])
+@application.route("/authenticate", methods=["GET", "POST"])
 def post_install():
     auth_code = request.args['code']
     sc = SlackClient("")
@@ -257,8 +270,10 @@ def post_install():
         client_secret=client_secret,
         code=auth_code
     )
-    user_token = auth_response['access_token']
-    bot_token = auth_response['bot']['bot_access_token']
+    user_info = (auth_response['user_id'], auth_response['access_token'])
+    db.execute('INSERT INTO tokens VALUES (?, ?)', user_info)
+    db.commit()
+    Thread(target=new_user, args=user_info)
     return "Auth complete"
 
 @application.route("/")
