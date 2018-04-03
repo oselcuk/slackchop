@@ -103,11 +103,11 @@ def handle_message(slack_event, message):
         reply = 'heads' if random.getrandbits(1) else 'tails'
         send_message(channel=channel, text=reply);
         return
-    match = re.match(r'!(?:shuffle|flip)\s+(.+)', message)
+    match = re.match(r'!shuffle\s+(\S.*)', message)
     if match:
-        items = list(map(lambda x:x.strip(), match[1].split(',')))
+        items = list(map(str.strip, (match[1].split(',') if ',' in match[1] else match[1].split())))
         random.shuffle(items)
-        reply = ', '.join(items)
+        reply = ', '.join(items) if ',' in match[1] else ' '.join(items)
         send_message(channel=channel, text=reply);
         return
 
@@ -141,6 +141,22 @@ def handle_message(slack_event, message):
                     parts.append(pattern.format(letter))
                 elif letter in shake:
                     parts.append(pattern.format(shake[letter]))
+            words.append(':' + '::'.join(parts) + ':')
+        reply = ':space:'.join(words)
+        send_message(channel=channel, text=truncate_message(reply))
+        return
+
+    match = re.match(r'!waho\s+(\S.*)', message)
+    if match:
+        pattern = '{}-waho'
+        words = []
+        for word in match[1].split():
+            parts = []
+            for letter in word.lower():
+                if letter in 'wafflehouse':
+                    parts.append(pattern.format(letter))
+                else:
+                    parts.append('waffle')
             words.append(':' + '::'.join(parts) + ':')
         reply = ':space:'.join(words)
         send_message(channel=channel, text=truncate_message(reply))
@@ -194,11 +210,14 @@ def choose(seq, limit=None):
     return ret
 
 def event_handler(slack_event):
+    # p(slack_event)
     event = slack_event['event']
     event_type = event['type']
     if event_type == 'reaction_added':
         user_id = event['user']
     elif event_type == 'message' and 'text' in event:
+        if event['text'] == 'ABORT' and 'thread_ts' in event:
+            sc.api_call('chat.update', channel=event['channel'], text='Aborted by <@{}>. Contact <@{}>'.format(event['user'], slack_event['authed_users'][0]), ts=event['thread_ts'], attachments=[])
         handle_message(slack_event, event['text'])
     elif event_type == 'emoji_changed':
         global emojis
@@ -214,7 +233,7 @@ def event_handler(slack_event):
 @application.route("/events", methods=["GET", "POST"])
 def hears():
     slack_event = json.loads(request.data)
-    p(slack_event)
+    # p(slack_event)
     if "challenge" in slack_event:
         return make_response(slack_event["challenge"],
             200, {"content_type": "application/json"})
