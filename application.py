@@ -14,10 +14,10 @@ from datetime import datetime, timedelta
 from flask import Flask, request, make_response, render_template
 from slackclient import SlackClient
 
-db = sqlite3.connect('user_data.db').cursor()
-bot_token = db.execute('SELECT token FROM tokens WHERE token LIKE "xoxb-%" LIMIT 1').fetchone()[0]
-usr_token, usr_id = db.execute('SELECT token, userid FROM tokens WHERE token LIKE "xoxp-%" LIMIT 1').fetchone()
-
+with sqlite3.connect('user_data.db') as db:
+    bot_token = db.execute('SELECT token FROM tokens WHERE token LIKE "xoxb-%" LIMIT 1').fetchone()[0]
+    usr_token, usr_id = db.execute('SELECT token, userid FROM tokens WHERE token LIKE "xoxp-%" LIMIT 1').fetchone()
+    authed_users = {userid: token for (userid, token) in db.execute('SELECT * FROM tokens WHERE token LIKE "xoxp-%"')}
 
 bot = SlackClient(bot_token)
 usr = SlackClient(usr_token)
@@ -238,6 +238,47 @@ def event_handler(slack_event):
         p(slack_event)
     return make_response("Ok", 200, )
 
+@application.route("/slackchop/slash/s", methods=["POST"])
+def find_replace():
+    val = request.values
+    # p(val['channel_id'], val['user_id'], val['command'], val['text'])
+
+    # Make sure we can edit the user's messages
+    if val['user_id'] not in authed_users:
+        return "Please authorize slackchop to edit your messages"
+    token = authed_users[val['user_id']]
+
+    parts = re.split(r'(?<!\\)(?:\\\\)*\/', val['text'])
+    if len(parts) != 4 or parts[0] != '' or parts[3] != '':
+        return "Malformed expression. Make sure to start and end with `/` and escape all others with `\\/`"
+
+    sc = SlackClient(token)
+    result = sc.api_call(
+        'conversations.history',
+        channel=val['channel_id'],
+        limit=20
+    )
+    # p('Result:', result, '\n')
+    if not result['ok']:
+        return "Couldn't read channel history, contact @ozy"
+    message = next(
+        (m for m in result['messages'] if m['user'] == val['user_id']),
+        None
+    )
+    if not message:
+        return "Currently only supports editing in last 20 messages"
+
+    # p('Message:', message, '\n')
+    text = re.sub(parts[1], parts[2], message['text'])
+    # p('Text:', text, '\n')
+    sc.api_call(
+        'chat.update',
+        channel=val['channel_id'],
+        text=text,
+        ts=message['ts']
+    )
+    return make_response('', 200, )
+
 @application.route("/events", methods=["GET", "POST"])
 def hears():
     slack_event = json.loads(request.data)
@@ -261,7 +302,7 @@ def new_user(user_id, user_token):
         sc.api_call('files.delete', file=file['id'])
 
 @application.route("/authenticate", methods=["GET", "POST"])
-def post_install():
+def authenticate():
     auth_code = request.args['code']
     sc = SlackClient("")
     auth_response = sc.api_call(
@@ -271,8 +312,12 @@ def post_install():
         code=auth_code
     )
     user_info = (auth_response['user_id'], auth_response['access_token'])
-    db.execute('INSERT INTO tokens VALUES (?, ?)', user_info)
-    db.commit()
+
+    with sqlite3.connect('user_data.db') as db:
+        db.execute('INSERT INTO tokens VALUES (?, ?)', user_info)
+        db.commit()
+    # TODO: set userid as primary key and use insert or update
+    authed_users[user_info[0]] = authed_users[user_info[1]]
     Thread(target=new_user, args=user_info)
     return "Auth complete"
 

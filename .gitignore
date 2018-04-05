@@ -1,5 +1,6 @@
 credentials.py
 nohup.*
+user_data.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
