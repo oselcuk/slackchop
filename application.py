@@ -249,8 +249,8 @@ def find_replace():
     token = authed_users[val['user_id']]
 
     parts = re.split(r'(?<!\\)(?:\\\\)*\/', val['text'])
-    if len(parts) != 4 or parts[0] != '' or parts[3] != '':
-        return "Malformed expression. Make sure to start and end with `/` and escape all others with `\\/`"
+    if len(parts) != 4 or parts[0] != '':
+        return "Malformed expression. Make sure to have exactly 3 unescaped slashes, escape the rest with `\\/`"
 
     sc = SlackClient(token)
     result = sc.api_call(
@@ -262,14 +262,17 @@ def find_replace():
     if not result['ok']:
         return "Couldn't read channel history, contact @ozy"
     message = next(
-        (m for m in result['messages'] if m['user'] == val['user_id']),
+        (m for m in result['messages'] if 'user' in m and m['user'] == val['user_id']),
         None
     )
     if not message:
         return "Currently only supports editing in last 20 messages"
-
+    
+    count = 1
+    if parts[3] == 'g': count = 0
+    if parts[3].isdigit(): count = int(parts[3])
     # p('Message:', message, '\n')
-    text = re.sub(parts[1], parts[2], message['text'])
+    text = re.sub(parts[1], parts[2], message['text'], count=count)
     # p('Text:', text, '\n')
     sc.api_call(
         'chat.update',
