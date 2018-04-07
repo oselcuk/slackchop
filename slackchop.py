@@ -21,9 +21,11 @@ with sqlite3.connect('user_data.db') as db:
 
 bot = SlackClient(bot_token)
 usr = SlackClient(usr_token)
-reddit = praw.Reddit(client_id=reddit_client_id,
+reddit = praw.Reddit(
+    client_id=reddit_client_id,
     client_secret=reddit_client_secret,
-    user_agent='Slackchop')
+    user_agent='Slackchop'
+)
 
 # this is an infinite random bit generator. shitty but it works
 randbits = iter(lambda: random.getrandbits(1), 2)
@@ -52,7 +54,7 @@ shake = {'?': 'question',
 
 
 
-application = Flask(__name__)
+app = Flask(__name__)
 
 def get_emojis(init=False, add=None, rmeove=None):
     # currently can't get this from an online list because slack doesn't return
@@ -238,7 +240,7 @@ def event_handler(slack_event):
         p(slack_event)
     return make_response("Ok", 200, )
 
-@application.route("/slackchop/slash/s", methods=["POST"])
+@app.route("/slackchop/slash/s", methods=["POST"])
 def find_replace():
     val = request.values
     # p(val['channel_id'], val['user_id'], val['command'], val['text'])
@@ -267,7 +269,7 @@ def find_replace():
     )
     if not message:
         return "Currently only supports editing in last 20 messages"
-    
+
     count = 1
     if parts[3] == 'g': count = 0
     if parts[3].isdigit(): count = int(parts[3])
@@ -282,7 +284,7 @@ def find_replace():
     )
     return make_response('', 200, )
 
-@application.route("/events", methods=["GET", "POST"])
+@app.route("/slackchop/events", methods=["GET", "POST"])
 def hears():
     slack_event = json.loads(request.data)
     # p(slack_event)
@@ -304,7 +306,7 @@ def new_user(user_id, user_token):
     for file in files:
         sc.api_call('files.delete', file=file['id'])
 
-@application.route("/authenticate", methods=["GET", "POST"])
+@app.route("/slackchop/authenticate", methods=["GET", "POST"])
 def authenticate():
     auth_code = request.args['code']
     sc = SlackClient("")
@@ -324,9 +326,9 @@ def authenticate():
     Thread(target=new_user, args=user_info)
     return "Auth complete"
 
-@application.route("/")
+@app.route("/slackchop")
 def go_away():
-    return 'Go Away'
+    return 'Endpoints for slackchop, nothing to see here'
 
 if __name__ == '__main__':
-    application.run(debug=True)
+    app.run(debug=True)
