@@ -1,8 +1,11 @@
+import io
 import json
+import os
 import random
 import re
 import requests
 import sqlite3
+import subprocess
 import time
 from sys import stderr
 from itertools import islice
@@ -13,6 +16,14 @@ from credentials import *
 from datetime import datetime, timedelta
 from flask import Flask, request, make_response, render_template
 from slackclient import SlackClient
+
+from meme_maker import make_meme
+
+if os.environ.get('SLACKCHOP_PULL_STATUS', '') == 'RESTARTED_AFTER_PULL':
+    os.environ['SLACKCHOP_PULL_STATUS'] = 'FIRST_RUN_AFTER_PULL'
+elif os.environ.get('SLACKCHOP_PULL_STATUS', '') == 'FIRST_RUN_AFTER_PULL':
+    subprocess.run(['git', 'checkout', os.environ['SLACKCHOP_LAST_STABLE_COMMIT']])
+    exit(1)
 
 with sqlite3.connect('user_data.db') as db:
     bot_token = db.execute('SELECT token FROM tokens WHERE token LIKE "xoxb-%" LIMIT 1').fetchone()[0]
@@ -184,6 +195,14 @@ def handle_message(slack_event, message):
         send_message(channel=channel, text=''.join(ems))
         return
 
+    match = re.match(r'!meme(?:\s+"([^"]*)")(?:\s+"([^"]*)")?(?:\s+"([^"]*)")?', message)
+    if match:
+        image = make_meme(*match.groups())
+        data = io.BytesIO()
+        image.save(data, 'jpeg')
+        bot.api_call('files.upload', channels=[channel], file=data.getvalue())
+        return
+
     take = lambda x: not x.stickied and not x.is_self
     match = re.match(r'!randfeld\s+(.*)', message)
     if match:
@@ -326,9 +345,46 @@ def authenticate():
     Thread(target=new_user, args=user_info)
     return "Auth complete"
 
+def pull_changes():
+    if request.headers.get('X-GitHub-Event') != 'push':
+        return (False, 'Unexpected event type: {}\nPayload:{}'.format(
+            request.headers.get('X-GitHub-Event'), request.get_json()))
+    try:
+        run = lambda *args: subprocess.check_output(list(args))
+        res = run('git', 'status', '--porcelain')
+        if res: return (False, 'Workspace dirty:\n{}'.format(res))
+        res = run('git', 'fetch')
+        res = run('git', 'rev-list', '--left-right', '--count', '@{u}..')
+        behind, ahead = res.split()
+        if ahead: return (False, '{} unpushed commits on server'.format(ahead))
+        if not behind:
+            return (False, 'No new commits, aborting. Payload:\n{}'.format(
+                request.get_json()))
+        os.environ['SLACKCHOP_LAST_STABLE_COMMIT'] = run('git', 'rev-parse', 'head')
+        res = run('git', 'pull')
+        return (True, 'Pulled successfully. Restarting...')
+    except CalledProcessError as e:
+        return (False, 'Something went wrong. Error:\n{}'.format(e))
+
+@app.route("/slackchop/github", methods=["POST"])
+def github_webhook():
+    # p(request.headers.get('X-GitHub-Event'))
+    # p(request.get_json())
+    success, message = pull_changes()
+    bot.api_call('files.upload', channels=[usr_id], content=message, filetype='python')
+    if success:
+        os.environ['SLACKCHOP_PULL_STATUS'] = 'RESTARTED_AFTER_PULL'
+        shutdown = request.environ.get('werkzeug.server.shutdown')
+        shutdown()
+    return ('', 200, )
+
 @app.route("/slackchop")
 def go_away():
     return 'Endpoints for slackchop, nothing to see here'
+
+if os.environ.get('SLACKCHOP_PULL_STATUS', '') == 'FIRST_RUN_AFTER_PULL':
+    os.environ['SLACKCHOP_PULL_STATUS'] == 'STABLE'
+    os.environ['SLACKCHOP_LAST_STABLE_COMMIT'] = subprocess.check_output('git', 'rev-parse', 'head')
 
 if __name__ == '__main__':
     app.run(debug=True)
