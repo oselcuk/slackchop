@@ -28,7 +28,7 @@ def draw_outlined_text(draw, xy, outline_size=1, outline_color='black', text_col
     draw.text(xy, fill=text_color, **kwargs)
 
 def add_text(img, top, bottom):
-    font = ImageFont.truetype('impact', 40)
+    font = ImageFont.truetype('Impacted.ttf', 40)
     w, h = img.size
     wf = lambda x: font.getsize(x)[0]
     top_lines = get_lines(w, wf, top.split())
@@ -39,7 +39,7 @@ def add_text(img, top, bottom):
     bottom = '\n'.join(bottom_lines)
     top_size = draw.textsize(top, font=font)
     top_offset = ((w - top_size[0]) / 2, 0)
-    bottom_size = draw.textsize(top, font=font)
+    bottom_size = draw.textsize(bottom, font=font)
     bottom_offset = ((w - bottom_size[0]) / 2, h - bottom_size[1])
 
     draw_outlined_text(draw, top_offset, text=top, font=font, align='center')
@@ -53,5 +53,4 @@ def make_meme(query, top, bottom):
         scale = 600.0 / dim
         img = img.resize(tuple(map(lambda x: int(x*scale), img.size)))
     img = add_text(img, top or '', bottom or '')
-    img.save('test.jpg')
     return img
