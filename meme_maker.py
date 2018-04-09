@@ -40,7 +40,7 @@ def add_text(img, top, bottom):
     top_size = draw.textsize(top, font=font)
     top_offset = ((w - top_size[0]) / 2, 0)
     bottom_size = draw.textsize(bottom, font=font)
-    bottom_offset = ((w - bottom_size[0]) / 2, h - bottom_size[1])
+    bottom_offset = ((w - bottom_size[0]) / 2, h - bottom_size[1] - 1)
 
     draw_outlined_text(draw, top_offset, text=top, font=font, align='center')
     draw_outlined_text(draw, bottom_offset, text=bottom, font=font, align='center')

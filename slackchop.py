@@ -22,7 +22,7 @@ from meme_maker import make_meme
 if os.environ.get('SLACKCHOP_PULL_STATUS', '') == 'RESTARTED_AFTER_PULL':
     os.environ['SLACKCHOP_PULL_STATUS'] = 'FIRST_RUN_AFTER_PULL'
 elif os.environ.get('SLACKCHOP_PULL_STATUS', '') == 'FIRST_RUN_AFTER_PULL':
-    subprocess.run(['git', 'checkout', os.environ['SLACKCHOP_LAST_STABLE_COMMIT']])
+    subprocess.run(['/usr/bin/git', '-C', '/home/ozy/slackchop', 'checkout', os.environ['SLACKCHOP_LAST_STABLE_COMMIT']])
     exit(1)
 
 with sqlite3.connect('user_data.db') as db:
@@ -351,20 +351,20 @@ def pull_changes():
             request.headers.get('X-GitHub-Event'), request.get_json()))
     try:
         run = lambda *args: subprocess.check_output(list(args))
-        res = run('git', 'status', '--porcelain')
+        res = run('/usr/bin/git', '-C', '/home/ozy/slackchop', 'status', '--porcelain')
         if res: return (False, 'Workspace dirty:\n{}'.format(res))
-        res = run('git', 'fetch')
-        res = run('git', 'rev-list', '--left-right', '--count', '@{u}..')
+        res = run('/usr/bin/git', '-C', '/home/ozy/slackchop', 'fetch')
+        res = run('/usr/bin/git', '-C', '/home/ozy/slackchop', 'rev-list', '--left-right', '--count', '@{u}..')
         behind, ahead = res.split()
         if ahead: return (False, '{} unpushed commits on server'.format(ahead))
         if not behind:
             return (False, 'No new commits, aborting. Payload:\n{}'.format(
                 request.get_json()))
-        os.environ['SLACKCHOP_LAST_STABLE_COMMIT'] = run('git', 'rev-parse', 'head')
-        res = run('git', 'pull')
+        os.environ['SLACKCHOP_LAST_STABLE_COMMIT'] = run('/usr/bin/git', '-C', '/home/ozy/slackchop', 'rev-parse', 'head')
+        res = run('/usr/bin/git', '-C', '/home/ozy/slackchop', 'pull')
         return (True, 'Pulled successfully. Restarting...')
-    except CalledProcessError as e:
-        return (False, 'Something went wrong. Error:\n{}'.format(e))
+    except subprocess.CalledProcessError as e:
+        return (False, 'Something went wrong. Error:\n{}\n{}\n{}'.format(e, e.output, e.stderr))
 
 @app.route("/slackchop/github", methods=["POST"])
 def github_webhook():
@@ -384,7 +384,7 @@ def go_away():
 
 if os.environ.get('SLACKCHOP_PULL_STATUS', '') == 'FIRST_RUN_AFTER_PULL':
     os.environ['SLACKCHOP_PULL_STATUS'] == 'STABLE'
-    os.environ['SLACKCHOP_LAST_STABLE_COMMIT'] = subprocess.check_output('git', 'rev-parse', 'head')
+    os.environ['SLACKCHOP_LAST_STABLE_COMMIT'] = subprocess.check_output('/usr/bin/git', '-C', '/home/ozy/slackchop', 'rev-parse', 'head')
 
 if __name__ == '__main__':
     app.run(debug=True)
