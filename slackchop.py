@@ -146,16 +146,21 @@ def handle_message(slack_event, message):
 
     match = re.match(r'!shake\s+(\S.*)', message)
     if match:
-        pattern = 'shake_{}'
+        pattern = ':shake_{}:'
         words = []
         for word in match[1].split():
+            if len(word) > 2 and word[0] == ':' and word[-1] == ':':
+                s = pattern.format(word[1:-1])
+                if s[1:-1] in emojis:
+                    words.append(s)
+                    continue
             parts = []
             for letter in word.lower():
                 if letter.isalnum():
                     parts.append(pattern.format(letter))
                 elif letter in shake:
                     parts.append(pattern.format(shake[letter]))
-            words.append(':' + '::'.join(parts) + ':')
+            words.append(''.join(parts))
         reply = ':space:'.join(words)
         send_message(channel=channel, text=truncate_message(reply))
         return
