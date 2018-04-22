@@ -6,14 +6,19 @@ import re
 import requests
 import sqlite3
 import time
-from sys import stderr
+
 from itertools import islice
-from threading import Thread
+from sys import stderr
 
 import praw
+
 from credentials import *
-from datetime import datetime, timedelta
-from flask import Flask, request, make_response, render_template
+from datetime import datetime
+from datetime import timedelta
+from flask import Flask
+from flask import make_response
+from flask import render_template
+from flask import request
 from slackclient import SlackClient
 
 from meme_maker import make_meme
@@ -310,19 +315,6 @@ def hears():
             200, {"content_type": "application/json"})
     return event_handler(slack_event)
 
-def new_user(user_id, user_token):
-    sc = SlackClient(user_token)
-    two_weeks_ago = str(time.time() - 14*24*60*60)
-    res = sc.api_call('files.list', ts_to=two_weeks_ago)
-    files = res['files']
-    while res['paging']['page'] < res['paging']['pages']:
-        res = sc.api_call('files.list',
-            ts_to=two_weeks_ago,
-            page=res['paging']['page']+1)
-        files += res['files']
-    for file in files:
-        sc.api_call('files.delete', file=file['id'])
-
 @app.route("/slackchop/authenticate", methods=["GET", "POST"])
 def authenticate():
     auth_code = request.args['code']
@@ -333,14 +325,13 @@ def authenticate():
         client_secret=client_secret,
         code=auth_code
     )
-    user_info = (auth_response['user_id'], auth_response['access_token'])
+    user_id, user_token = auth_response['user_id'], auth_response['access_token']
 
     with sqlite3.connect('user_data.db') as db:
-        db.execute('INSERT INTO tokens VALUES (?, ?)', user_info)
+        db.execute('INSERT INTO tokens VALUES (?, ?)', (user_id, user_token))
         db.commit()
     # TODO: set userid as primary key and use insert or update
-    authed_users[user_info[0]] = authed_users[user_info[1]]
-    Thread(target=new_user, args=user_info)
+    authed_users[user_id] = authed_users[user_token]
     return "Auth complete"
 
 @app.route("/slackchop")
