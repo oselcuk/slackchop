@@ -22,6 +22,7 @@ from flask import request
 from slackclient import SlackClient
 
 from meme_maker import make_meme
+from content_leaderboard import process_message as cl_process
 
 with sqlite3.connect('user_data.db') as db:
     bot_token = db.execute('SELECT token FROM tokens WHERE token LIKE "xoxb-%" LIMIT 1').fetchone()[0]
@@ -88,6 +89,10 @@ def send_message(*args, **kwargs):
     bot.api_call('chat.postMessage', *args, **kwargs)
 
 def handle_message(slack_event, message):
+    try:
+        cl_process(bot, **slack_event['event'])
+    except Exception as e:
+        p('Welp', e)
     channel = slack_event['event']['channel']
     match = re.match(r'!youtube\s+(.+)', message)
     if match:
