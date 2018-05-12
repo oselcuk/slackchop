@@ -10,8 +10,6 @@ import time
 from itertools import islice
 from sys import stderr
 
-import praw
-
 from credentials import *
 from datetime import datetime
 from datetime import timedelta
@@ -32,11 +30,6 @@ with sqlite3.connect('user_data.db') as db:
 
 bot = SlackClient(bot_token)
 usr = SlackClient(usr_token)
-reddit = praw.Reddit(
-    client_id=reddit_client_id,
-    client_secret=reddit_client_secret,
-    user_agent='Slackchop'
-)
 
 # this is an infinite random bit generator. shitty but it works
 randbits = iter(lambda: random.getrandbits(1), 2)
@@ -210,21 +203,6 @@ def handle_message(slack_event, message):
         data = io.BytesIO()
         image.save(data, 'jpeg')
         bot.api_call('files.upload', channels=[channel], file=data.getvalue())
-        return
-
-    take = lambda x: not x.stickied and not x.is_self
-    match = re.match(r'!randfeld\s+(.*)', message)
-    if match:
-        sub = choose(filter(take,
-            reddit.subreddit('seinfeldgifs').search(match[1]+' self:no')), 50)
-        send_message(channel=channel, text=sub.url,
-            unfurl_links=True, unfurl_media=True, icon_emoji=':jerry:')
-        return
-    if message.startswith('!randfeld'):
-        sub = choose(filter(take,
-            reddit.subreddit('seinfeldgifs').hot(limit=50)))
-        send_message(channel=channel, text=sub.url,
-            unfurl_links=True, unfurl_media=True, icon_emoji=':jerry:')
         return
 
     if message.startswith('!gridtext '):
