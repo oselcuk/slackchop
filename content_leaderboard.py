@@ -81,12 +81,12 @@ def process_message(client, channel, user, text, ts, **kwargs):
     if match:
         url = match[1]
         process_new_content(url, user_id_to_name(client, user), ts)
-    match = re.search(r'(<[A-Z0-9]+>|[\w.-]+)([+-]{2,})', text)
+    match = re.search(r'(<@[A-Z0-9]+>|[\w.-]+) ?([+-]{2,})', text)
     if match:
         user, karma = match.groups()
 
         if user[0] == '<':
-            user = user_id_to_name(client, user[1:-1])
+            user = user_id_to_name(client, user[2:-1])
 
         karma = set(karma)
         if len(karma) == 1:

@@ -10,7 +10,6 @@ import time
 from itertools import islice
 from sys import stderr
 
-from credentials import *
 from datetime import datetime
 from datetime import timedelta
 from flask import Flask
@@ -40,7 +39,7 @@ def p(*args, **kwargs):
     print(*args, **kwargs, file = stderr)
 
 youtube_url = 'https://www.youtube.com'
-youtube_vid_regex = '/watch\?v=[^"]+'
+youtube_vid_regex = '/watch?v=[^"]+'
 google_search_base = 'https://www.google.com/search'
 fake_mobile_agent = '''Mozilla/5.0 (iPhone; U; CPU iPhone OS 4_0 like Mac OS X; en-us) AppleWebKit/532.9 (KHTML, like Gecko) Versio  n/4.0.5 Mobile/8A293 Safari/6531.22.7'''
 shake = {'?': 'question',
@@ -81,12 +80,13 @@ def truncate_message(message):
 
 def send_message(*args, **kwargs):
     bot.api_call('chat.postMessage', *args, **kwargs)
-
+import traceback
 def handle_message(slack_event, message):
     try:
         cl_process(bot, **slack_event['event'])
     except Exception as e:
-        p('Welp', e, slack_event)
+        p('Exception in message handling: ', e)
+        p('    on event: ', slack_event)
     channel = slack_event['event']['channel']
     match = re.match(r'!youtube\s+(.+)', message)
     if match:
@@ -293,7 +293,6 @@ def find_replace():
 @app.route("/slackchop/events", methods=["GET", "POST"])
 def hears():
     slack_event = json.loads(request.data)
-    # p(slack_event)
     if "challenge" in slack_event:
         return make_response(slack_event["challenge"],
             200, {"content_type": "application/json"})
