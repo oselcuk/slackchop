@@ -65,7 +65,7 @@ def get_leaders(ts, limit=10, since=7*24*60*60):
     result = []
     for idx, row in enumerate(leaders):
         _, name, content, pos, neg, pun = row
-        result.append('#{:>2}({:=+3d}): @{} with {}'.format(idx+1, pos-neg, name, content))
+        result.append('#{:>2}({:=+3d}): <{}|{}>'.format(idx+1, pos-neg, content, name))
     return '\n'.join(result)
 
 def process_message(client, channel, user, text, ts, **kwargs):
