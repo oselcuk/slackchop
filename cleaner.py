@@ -9,8 +9,7 @@ from requests import get
 
 from slackclient import SlackClient
 
-# default to 10 days
-def get_files(user_token, older_than=14):
+def get_files(user_token, older_than):
     secs_in_day = 24*60*60
     sc = SlackClient(user_token)
     since = str(time.time() - older_than*secs_in_day)
@@ -56,7 +55,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download and delete old files from slack')
     parser.add_argument('-u', '--user-data-db', action='store', type=str)
     parser.add_argument('-t', '--user-tokens', action='store', nargs='*')
-    parser.add_argument('-o', '--older-than', action='store', type=int, default=14)
+    parser.add_argument('-o', '--older-than', action='store', type=int, default=7)
     parser.add_argument('-d', '--download', action='store_true')
     parser.add_argument('-2', '--download-to', action='store', nargs='?')
     parser.add_argument('-D', '--delete', action='store_true')

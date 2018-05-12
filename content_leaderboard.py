@@ -1,5 +1,6 @@
 from sqlite3 import connect
 import re
+import sys
 
 #TODO: parameterize
 CONTENT_CHANNEL = 'C1UJVTPTQ'
@@ -42,7 +43,7 @@ def process_karma(user, karma):
 
 def user_id_to_name(client, user):
     res = client.api_call('users.info', user=user)
-    return res['user']['name']
+    return res['user']['profile']['display_name']
 
 def ts_string_to_num(ts):
     if '.' in ts:
@@ -59,21 +60,23 @@ def get_leaders(ts, limit=10, since=7*24*60*60):
             WHERE ts > ?
             LIMIT ?
         ''', (since, limit)).fetchall()
+    leaders = sorted(leaders, key=lambda x:x[4]-x[3])
+    print(leaders, file=sys.stderr)
     result = []
     for idx, row in enumerate(leaders):
         _, name, content, pos, neg, pun = row
-        result.append('#{}({}): {} with {}'.format(idx+1, pos-neg, name, content))
+        result.append('#{:>2}({:=+3d}): @{} with {}'.format(idx+1, pos-neg, name, content))
     return '\n'.join(result)
 
 def process_message(client, channel, user, text, ts, **kwargs):
-    if channel != CONTENT_CHANNEL: return
-    if text.strip() == '!content':
+    if text.strip() == '!dankest':
         client.api_call(
             'chat.postMessage',
             channel=channel,
             text=get_leaders(ts)
         )
         return
+    if channel != CONTENT_CHANNEL: return
     match = re.search(r'<(http.*?)>', text, re.IGNORECASE)
     if match:
         url = match[1]

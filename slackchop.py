@@ -19,6 +19,7 @@ from flask import Flask
 from flask import make_response
 from flask import render_template
 from flask import request
+from flask import redirect
 from slackclient import SlackClient
 
 from meme_maker import make_meme
@@ -92,7 +93,7 @@ def handle_message(slack_event, message):
     try:
         cl_process(bot, **slack_event['event'])
     except Exception as e:
-        p('Welp', e)
+        p('Welp', e, slack_event)
     channel = slack_event['event']['channel']
     match = re.match(r'!youtube\s+(.+)', message)
     if match:
@@ -102,7 +103,7 @@ def handle_message(slack_event, message):
         send_message(channel=channel, text=youtube_url+vids[0])
         return
 
-    match = re.match(r'!(gif|image)\s+(.+)', message)
+    match = re.match(r'!(gif|image|picture)\s+(.+)', message)
     if match:
         t, q = match[1], match[2]
         #TODO: Normalize messages before passing them to modules
@@ -112,7 +113,7 @@ def handle_message(slack_event, message):
         response = requests.get(google_search_base,
             params=params, headers={"User-agent": fake_mobile_agent})
         links = re.findall(r'imgurl\\x3d([^\\]+)\\', response.text)
-        send_message(channel=channel, text=random.choice(links),
+        send_message(channel=channel, text=links[0], #random.choice(links),
             unfurl_links=True, unfurl_media=True)
 
     match = re.match(r'!roll\s+(\d*|an?)\s*[dD]\s*(\d+)', message)
@@ -322,6 +323,8 @@ def hears():
 
 @app.route("/slackchop/authenticate", methods=["GET", "POST"])
 def authenticate():
+    if 'code' not in request.args:
+        return redirect('https://slack.com/oauth/authorize?client_id=2905379977.308137827877&scope=channels:history,reactions:read,bot,groups:history,chat:write:user,chat:write:bot,emoji:read,users:read,files:read,files:write:user')
     auth_code = request.args['code']
     sc = SlackClient("")
     auth_response = sc.api_call(
@@ -332,11 +335,15 @@ def authenticate():
     )
     user_id, user_token = auth_response['user_id'], auth_response['access_token']
 
-    with sqlite3.connect('user_data.db') as db:
-        db.execute('INSERT INTO tokens VALUES (?, ?)', (user_id, user_token))
-        db.commit()
+    try:
+        with sqlite3.connect('user_data.db') as db:
+            db.execute('INSERT INTO tokens VALUES (?, ?)', (user_id, user_token))
+            db.commit()
+    except sqlite3.Error as e:
+        p('Failed to write credentials for user {}:{}\nauth_response:{}'.format(user_id, user_token, auth_response))
+        return "Something went wrong, probably because you already authenticated before. Contact @ozy if you think that is not the case"
     # TODO: set userid as primary key and use insert or update
-    authed_users[user_id] = authed_users[user_token]
+    authed_users[user_id] = user_token
     return "Auth complete"
 
 @app.route("/slackchop")
