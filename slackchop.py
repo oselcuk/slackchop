@@ -13,14 +13,18 @@ from sys import stderr
 from datetime import datetime
 from datetime import timedelta
 from flask import Flask
+from flask import jsonify
 from flask import make_response
+from flask import redirect
 from flask import render_template
 from flask import request
-from flask import redirect
 from slackclient import SlackClient
 
-from meme_maker import make_meme
 from content_leaderboard import process_message as cl_process
+from meme_maker import make_meme
+
+from slackrr import request_media
+from slackrr import request_media_2
 
 with sqlite3.connect('user_data.db') as db:
     bot_token = db.execute('SELECT token FROM tokens WHERE token LIKE "xoxb-%" LIMIT 1').fetchone()[0]
@@ -29,6 +33,7 @@ with sqlite3.connect('user_data.db') as db:
 
 bot = SlackClient(bot_token)
 usr = SlackClient(usr_token)
+verification_token = None
 
 # this is an infinite random bit generator. shitty but it works
 randbits = iter(lambda: random.getrandbits(1), 2)
@@ -245,6 +250,20 @@ def event_handler(slack_event):
     else:
         p(slack_event)
     return make_response("Ok", 200, )
+
+@app.route("/slackchop/interactivity", methods=["POST"])
+def handle_interactivity():
+    payload = json.loads(request.values['payload'])
+    if verification_token:
+        assert payload['token'] == verification_token, "Verification tokens don't match!"
+    callback_id = payload['callback_id']
+    if callback_id in ['add_tv', 'add_movies']:
+        return request_media_2(payload, send_message)
+    return make_response('Callback id not recognized', 500, )
+
+@app.route("/slackchop/slash/request", methods=["POST"])
+def slash_request_media():
+    return request_media(request.values.to_dict(), verification_token)
 
 @app.route("/slackchop/slash/s", methods=["POST"])
 def find_replace():
