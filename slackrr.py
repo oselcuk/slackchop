@@ -66,10 +66,10 @@ def get_poster_for_media(media):
 
 def get_attachment(media, arr):
     title = '{} ({})'.format(media['title'], media['year'])
-    copied_fields = [arr.db_key, 'title', 'titleSlug', 'images', 'seasons', 'imdbId', 'year']
+    copied_fields = [arr.db_key, 'title', 'titleSlug', 'images', 'seasons', 'imdbId', 'year', 'seriesType']
     download_data = {field: media[field] for field in copied_fields if field in media}
     download_data.update(arr.download_options)
-    return {
+    message = {
         'title': title,
         'title_link': get_link_for_media(media, arr),
         'text': media['overview'],
@@ -92,6 +92,20 @@ def get_attachment(media, arr):
             }
         ]
     }
+    if arr.medium == 'tv':
+        message['actions'][0]['confirm']['text'] += ' If this is an Anime, please click No and select the "Add Anime" button instead'
+        message['actions'].insert(0, {
+            'name': 'add_anime',
+            'text': 'Add Anime to Plex',
+            'type': 'button',
+            'confirm': {
+                'title': 'Confirmation',
+                'text': 'Are you sure you want to add {} to Plex? If this is not an Anime, please click No and select the "Add Show" button instead'.format(title),
+                'ok_text': 'Yes',
+                'dismiss_text': 'No'
+            }
+        })
+    return message
 
 def media_1(name, vals, arr):
     res = arr.get(arr.media_endpoint+'/lookup', params={'term': name})
@@ -110,6 +124,8 @@ def media_2(payload, arr, chat_fn):
         'text': 'Trying to add {}, please wait.'.format(media['title']),
         'replace_original': True
     }
+    if payload['callback_id'] == 'add_anime':
+        media['seriesType'] = 'anime'
     Thread(target=media_2_async, kwargs={
         'media': media,
         'payload': payload,
@@ -145,9 +161,7 @@ def request_media(vals, token):
 
     if vals['channel_name'] not in approved_channels:
         return make_response(
-            'You need to be in one of the following channels to use this feature: {}'
-                .format(', '.join(approved_channels)),
-            200, )
+            'You need to be in #ftp-media-requests to use this feature', 200, )
     if medium not in ['tv', 'movie', 'movies']:
         return make_response('Invalid command. First word of your command must be tv or movie', 200, )
     if len(parts) == 1:

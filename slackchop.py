@@ -257,7 +257,7 @@ def handle_interactivity():
     if verification_token:
         assert payload['token'] == verification_token, "Verification tokens don't match!"
     callback_id = payload['callback_id']
-    if callback_id in ['add_tv', 'add_movies']:
+    if callback_id in ['add_tv', 'add_movies', 'add_anime']:
         return request_media_2(payload, send_message)
     return make_response('Callback id not recognized', 500, )
 
