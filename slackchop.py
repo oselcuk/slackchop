@@ -85,7 +85,7 @@ def truncate_message(message):
 
 def send_message(*args, **kwargs):
     bot.api_call('chat.postMessage', *args, **kwargs)
-import traceback
+
 def handle_message(slack_event, message):
     try:
         cl_process(bot, **slack_event['event'])
@@ -93,6 +93,12 @@ def handle_message(slack_event, message):
         p('Exception in message handling: ', e)
         p('    on event: ', slack_event)
     channel = slack_event['event']['channel']
+
+    if message.startswith('!help'):
+        help_message = get_help(message)
+        send_message(channel=channel, text=help_message)
+        return
+
     match = re.match(r'!youtube\s+(.+)', message)
     if match:
         res = requests.get(youtube_url + '/results',
@@ -230,6 +236,68 @@ def handle_message(slack_event, message):
         reply = '```{}```'.format('\n'.join(res))
         send_message(channel=channel, text=reply)
         return
+
+help_dict = {
+    'Media': {
+        'overview': 'Find and return pictures, gifs or videos',
+        'variants': [
+            '```!gif QUERY``` return the top result for QUERY from Google Images gif search',
+            '```!image QUERY``` return the top result for QUERY from Google Images search',
+            '```!picture QUERY``` return `!image QUERY`',
+            '```!youtube QUERY``` return the top result for QUERY from Youtube'
+        ]
+    },
+    'Emoji': {
+        'overview': 'Find and return random emoji',
+        'variants': [
+            '```!emoji NUMBER``` return NUMBER random emoji',
+            '```!emoji REGEX``` return all emoji matching REGEX pattern. REGEX must have at least one non-digit',
+            '```!emoji{NUMBER} REGEX``` return NUMBER random emoji matching REGEX',
+            '```!randmoji REGEX``` return `!emoji{1} REGEX`',
+            '```!emoji :emoji: NUMBER``` return `:emoji:` repeated NUMBER times',
+            '```!emojify `:PATTERN:` WORDS``` PATTERN must include a `{}`. If PATTERN is omitted, `:{}:` is used by default. If there is only one WORD, its letters are used as the WORDS list. Returns a list of emoji by replacing `{}` with each WORD'
+            '```!waho TEXT``` waffle housify the TEXT',
+            '```!shake TEXT``` shake it'
+        ]
+    },
+    'Plex': {
+        'overview': 'Slash comman for adding media to plex. Type /request for instructions, only works on #ftp-media-requests'
+    },
+    'Randomness': {
+        'overview': 'Flip coins, roll dice or shuffle lists',
+        'variants': [
+            '```!flip``` flip a coin',
+            '```!roll a/an dNUMBER``` roll a NUMBER sided die',
+            '```!roll NUMBER1dNUMBER2``` roll a NUMBER2 sided die NUMBER1 times',
+            '```!shuffle LIST``` shuffle the comma or space separated LIST'
+        ]
+    },
+    'Other': {
+        'overview': 'Other assorted crap added over time',
+        'variants': [
+            '```!gridtext TEXT``` returns TEXT in grid format',
+            '```!dankest``` returns a leaderboard of most upvoted content in the last week. Only works in #content',
+        ]
+    }
+}
+def get_help(helptext):
+    assert helptext.startswith('!help'), 'Wrong usage if get_help'
+    subject = helptext[len('!help'):].strip()
+    message = ''
+    if subject:
+        subject_dict = help_dict.get(subject.capitalize())
+        if not subject_dict: return 'Unkown subject, use !help to get a list of subjects'
+        message += '_*{}*_: {}'.format(subject, subject_dict['overview'])
+        variants = subject_dict.get('variants')
+        if variants:
+            message += '\n    '
+            message += '\n    '.join(variants)
+    else:
+        message += 'To get details on a subject, use `!help SUBJECT`, where SUBJECT is one of the _*subjects*_ below\n'
+        for key, value in help_dict.items():
+            message += '_*{}*_: {}\n'.format(key, value['overview'])
+    return message
+
 
 def choose(seq, limit=None):
     if limit: seq = islice(seq, limit)
