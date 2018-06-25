@@ -72,7 +72,7 @@ def get_attachment(media, arr):
     message = {
         'title': title,
         'title_link': get_link_for_media(media, arr),
-        'text': media['overview'],
+        'text': media.get('overview', '<no description available>'),
         'thumb_url': get_poster_for_media(media),
         'footer': '{} | Rating: {:.1f}/10'.format(', '.join(media['genres']), media['ratings']['value']),
         'callback_id': 'add_{}'.format(arr.medium),

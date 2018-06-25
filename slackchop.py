@@ -148,9 +148,18 @@ def handle_message(slack_event, message):
     match = re.match(r'!emoji\s+(\S+)\s*', message)
     if match:
         es = [x for x in emojis if re.search(match[1], x)]
-        if len(es) == 0: return
+        if not es: return
         reply = ':{}:'.format('::'.join(es))
         send_message(channel=channel, text=truncate_message(reply))
+        return
+
+    match = re.match(r'!(?:randmoji|emoji\{(\d+)\})\s+(\S.*)', message)
+    if match:
+        samples = int(match.group(1) or 1)
+        es = [x for x in emojis if re.search(match[2], x)]
+        if not es: return
+        reply = ':{}:'.format('::'.join(random.choices(es, k=samples)))
+        send_message(channel=channel, text=reply)
         return
 
     match = re.match(r'!shake\s+(\S.*)', message)

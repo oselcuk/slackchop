@@ -68,7 +68,8 @@ def get_leaders(ts, limit=10, since=7*24*60*60):
         result.append('#{:>2}({:=+3d}): <{}|{}>'.format(idx+1, pos-neg, content, name))
     return '\n'.join(result)
 
-def process_message(client, channel, user, text, ts, **kwargs):
+def process_message(client, channel, text, ts, user=None, **kwargs):
+    if not user: return
     if text.strip() == '!dankest':
         client.api_call(
             'chat.postMessage',
